@@ -16,6 +16,7 @@ namespace {
 
 
 Particle::Particle(int dim, int nobjs, double w, double c1, double c2, const std::vector<double> &lb, const std::vector<double> &ub) {
+    std::cout << "Particle constructor called" << std::endl;
     this->dim = dim;
     this->nobjs= nobjs;
     this->w = w;
@@ -23,14 +24,15 @@ Particle::Particle(int dim, int nobjs, double w, double c1, double c2, const std
     this->c2 = c2;
 
     this->x = std::vector<double>(dim);
-    this->fx = std::vector<double>(nobjs);
     this->v = std::vector<double>(dim);
+    this->fx = std::vector<double>(nobjs);
     this->pbest_x = std::vector<double>(dim);
     this->pbest_fx = std::vector<double>(nobjs);
     this->lower_bound = lb; 
     this->upper_bound = ub; 
 }
 Particle::Particle(const Particle &p) {
+    std::cout << "Particle copy constructor called" << std::endl;  
 
     this->dim = p.dim;
     this->nobjs= p.nobjs;
@@ -38,8 +40,8 @@ Particle::Particle(const Particle &p) {
     this->c1 = p.c1;
     this->c2 = p.c2;
     this->x = p.x;
-    this->fx = p.fx;
     this->v = p.v;
+    this->fx = p.fx;
     this->pbest_x = p.pbest_x;
     this->pbest_fx = p.pbest_fx;
     this->lower_bound = p.lower_bound;
@@ -47,6 +49,7 @@ Particle::Particle(const Particle &p) {
 }
 
 Particle& Particle::operator=(const Particle &p) {
+    std::cout << "Particle assignment operator called" << std::endl;
   // Protect against self-assignment
     if (this == &p) {
         return *this;

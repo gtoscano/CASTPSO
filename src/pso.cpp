@@ -97,10 +97,10 @@ PSO::~PSO() {
 }
 
 void PSO::init() {
+    particles.reserve(nparts);
     for (int i = 0; i < nparts; i++) {
-        Particle p(dim, nobjs, w, c1, c2, lower_bound, upper_bound);
-        p.init();
-        particles.push_back(p);
+        particles.emplace_back(dim, nobjs, w, c1, c2, lower_bound, upper_bound);
+        particles[i].init();
     }
     update_gbest();
 }

@@ -39,7 +39,6 @@ int main (int argc, char *argv[]) {
     std::vector<double> lb(ndim, -5.0);
     std::vector<double> ub(ndim, 5.0);
     PSO pso(ndim, nparts, nobjs, max_iter, w, c1, c2, lb, ub);
-    pso.init();
     pso.optimize();
     std::vector<std::vector<double>> gbest_x = pso.get_gbest_x();
     std::vector<std::vector<double>> gbest_fx = pso.get_gbest_fx();
