@@ -2,6 +2,9 @@
 #include <iostream>
 #include <random>
 #include <algorithm>
+#include <crossguid/guid.hpp>
+#include <fmt/core.h>
+
 #include "particle.h"
 #include "external_archive.h"
 
@@ -15,8 +18,9 @@ namespace {
 }
 
 
-Particle::Particle(int dim, int nobjs, double w, double c1, double c2, const std::vector<double> &lb, const std::vector<double> &ub) {
-    std::cout << "Particle constructor called" << std::endl;
+Particle::Particle(int dim, int nobjs, double w, double c1, double c2, double lb, double ub) {
+    //fmt::print("Particle constructor\n");
+    fmt::print("{}\n", dim);
     this->dim = dim;
     this->nobjs= nobjs;
     this->w = w;
@@ -30,10 +34,14 @@ Particle::Particle(int dim, int nobjs, double w, double c1, double c2, const std
     this->pbest_fx = std::vector<double>(nobjs);
     this->lower_bound = lb; 
     this->upper_bound = ub; 
+    this->uuid_ = xg::newGuid().str();
+    this->lc_cost_ = 0.0; 
+    this->animal_cost_ = 0.0;
 }
-Particle::Particle(const Particle &p) {
-    std::cout << "Particle copy constructor called" << std::endl;  
 
+
+Particle::Particle(const Particle &p) {
+    //fmt::print("Particle copy constructor\n");
     this->dim = p.dim;
     this->nobjs= p.nobjs;
     this->w = p.w;
@@ -46,11 +54,14 @@ Particle::Particle(const Particle &p) {
     this->pbest_fx = p.pbest_fx;
     this->lower_bound = p.lower_bound;
     this->upper_bound = p.upper_bound;
+    this->uuid_ = p.uuid_;
+    this->lc_x_ = p.lc_x_;
+    this->animal_x_ = p.animal_x_;
 }
 
 Particle& Particle::operator=(const Particle &p) {
-    std::cout << "Particle assignment operator called" << std::endl;
   // Protect against self-assignment
+    //fmt::print("Particle assignment operator\n");
     if (this == &p) {
         return *this;
     }
@@ -66,20 +77,38 @@ Particle& Particle::operator=(const Particle &p) {
     this->pbest_fx = p.pbest_fx;
     this->lower_bound = p.lower_bound;
     this->upper_bound = p.upper_bound;
+    this->uuid_ = p.uuid_;
+    this->lc_x_ = p.lc_x_;
+    this->animal_x_ = p.animal_x_;
     return *this;
 }
 
-Particle::~Particle() {
-}
 
 void Particle::init() {
 
     for (int i = 0; i < dim; i++) {
-        x[i] = rand_double(lower_bound[i], upper_bound[i]);
+        x[i] = rand_double(lower_bound, upper_bound);
         v[i] = 0.0; 
     }
 
-    evaluate();
+    //evaluate();
+    //pbest_x = x;
+    //pbest_fx = fx;
+}
+
+void Particle::init(const std::vector<double> &xp ) {
+
+    for (int i = 0; i < dim; i++) {
+        x[i] = xp[i]; 
+        v[i] = 0.0; 
+    }
+
+    //evaluate();
+    //pbest_x = x;
+    //pbest_fx = fx;
+}
+
+void Particle::init_pbest() {
     pbest_x = x;
     pbest_fx = fx;
 }
@@ -97,17 +126,18 @@ void Particle::update(const std::vector<double> &gbest_x) {
         // update position
         x[i] = x[i] + v[i];
         // check if x is out of bounds
-        if (x[i] < lower_bound[i]) {
-            x[i] = lower_bound[i];
+        if (x[i] < lower_bound) {
+            x[i] = lower_bound;
         }
-        if (x[i] > upper_bound[i]) {
-            x[i] = upper_bound[i];
+        if (x[i] > upper_bound) {
+            x[i] = upper_bound;
         }
 
     }
-    evaluate();
-    update_pbest();
+    //evaluate();
+    //update_pbest();
 }
+
 
 
 void Particle::update_pbest() {
@@ -128,5 +158,10 @@ void Particle::evaluate() {
     }
     fx[0] = fx0; 
     fx[1] = fx1; 
+}
+
+void Particle::set_fx(double fx1, double fx2) {
+    fx[0] = fx1; 
+    fx[1] = fx2;
 }
 

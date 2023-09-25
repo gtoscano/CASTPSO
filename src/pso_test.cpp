@@ -8,22 +8,22 @@
 namespace {
     
     void save(const std::vector<std::vector<double>>& data, const std::string& filename) {
-        std::ofstream outFile(filename);
+        std::ofstream out_file(filename);
         
         // Check if the file opened successfully
-        if (!outFile) {
+        if (!out_file) {
             std::cerr << "Failed to open the file.\n";
             return;
         }
         
         for (const auto& row : data) {
             for (const auto& val : row) {
-                outFile << val << ' ';
+                out_file << val << ' ';
             }
-            outFile << '\n';
+            out_file << '\n';
         }
         
-        outFile.close();
+        out_file.close();
     }
 }
 
@@ -36,9 +36,11 @@ int main (int argc, char *argv[]) {
     double c1 = 1.4;
     double c2 = 1.4;
     double w = 0.7;
-    std::vector<double> lb(ndim, -5.0);
-    std::vector<double> ub(ndim, 5.0);
-    PSO pso(ndim, nparts, nobjs, max_iter, w, c1, c2, lb, ub);
+    double lb(0.0);
+    double ub(1.0);
+    std::string input_filename = "prueba.json";
+    std::string out_dir = "out";
+    PSO pso(nparts, nobjs, max_iter, w, c1, c2, lb, ub, input_filename, out_dir, false, true, true);
     pso.optimize();
     std::vector<std::vector<double>> gbest_x = pso.get_gbest_x();
     std::vector<std::vector<double>> gbest_fx = pso.get_gbest_fx();
