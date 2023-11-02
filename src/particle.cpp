@@ -4,9 +4,13 @@
 #include <algorithm>
 #include <crossguid/guid.hpp>
 #include <fmt/core.h>
+#include "json.hpp"
+#include <fstream>
 
 #include "particle.h"
 #include "external_archive.h"
+
+using json = nlohmann::json;
 
 namespace {
     std::random_device rd;
@@ -37,6 +41,7 @@ Particle::Particle(int dim, int nobjs, double w, double c1, double c2, double lb
     this->uuid_ = xg::newGuid().str();
     this->lc_cost_ = 0.0; 
     this->animal_cost_ = 0.0;
+    this->manure_cost_ = 0.0;
 }
 
 
@@ -57,6 +62,12 @@ Particle::Particle(const Particle &p) {
     this->uuid_ = p.uuid_;
     this->lc_x_ = p.lc_x_;
     this->animal_x_ = p.animal_x_;
+    this->manure_x_ = p.manure_x_;
+    this->lc_cost_ = p.lc_cost_; 
+    this->animal_cost_ = p.animal_cost_; 
+    this->manure_cost_ = p.manure_cost_; 
+    this->amount_plus_ = p.amount_plus_;
+    this->amount_minus_ = p.amount_minus_;
 }
 
 Particle& Particle::operator=(const Particle &p) {
@@ -80,6 +91,12 @@ Particle& Particle::operator=(const Particle &p) {
     this->uuid_ = p.uuid_;
     this->lc_x_ = p.lc_x_;
     this->animal_x_ = p.animal_x_;
+    this->manure_x_ = p.manure_x_;
+    this->lc_cost_ = p.lc_cost_; 
+    this->animal_cost_ = p.animal_cost_; 
+    this->manure_cost_ = p.manure_cost_; 
+    this->amount_plus_ = p.amount_plus_;
+    this->amount_minus_ = p.amount_minus_;
     return *this;
 }
 
@@ -139,6 +156,16 @@ void Particle::update(const std::vector<double> &gbest_x) {
 }
 
 
+void Particle::store_amount_plus_minus(const std::string& filename) {
+
+    json json_obj;// = json::object();
+    json_obj["plus"] = amount_plus_; 
+    json_obj["minus"] = amount_minus_;
+
+    std::ofstream file(filename);
+    file<<json_obj.dump();
+    file.close();
+}
 
 void Particle::update_pbest() {
     if (is_dominated(pbest_fx, fx) || !is_dominated(fx, pbest_fx)) {

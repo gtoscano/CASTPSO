@@ -19,9 +19,10 @@ using json = nlohmann::json;
 int main (int argc, char *argv[]) {
     std::string filename = "prueba.json";
     Scenario scenario;
-    bool is_animal_enabled = true;
     bool is_ef_enabled = true;
     bool is_lc_enabled = true;
+    bool is_animal_enabled = true;
+    bool is_manure_enabled = true;
     std::string emo_uuid = xg::newGuid().str();
     fmt::print("emo_uuid: {}\n", emo_uuid);
     std::string emo_path = fmt::format("/opt/opt4cast/output/nsga3/{}/", emo_uuid);
@@ -31,7 +32,7 @@ int main (int argc, char *argv[]) {
 
 
 
-    scenario.init(filename, is_ef_enabled, is_lc_enabled, is_animal_enabled);
+    scenario.init(filename, is_ef_enabled, is_lc_enabled, is_animal_enabled, is_manure_enabled);
     int lc_size = scenario.get_lc_size();
     int animal_size = scenario.get_animal_size();
     std::vector<double > x(lc_size + animal_size);

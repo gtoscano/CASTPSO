@@ -9,11 +9,35 @@
 #include <chrono>
 #include <ctime>
 #include <random>
+#include <fstream>
 
 
 namespace fs = std::filesystem;
 
 namespace misc_utilities {
+    bool is_parquet_file(const std::string& filename) {
+        std::ifstream file(filename, std::ios::binary);
+    
+        if (!file) {
+            std::cerr << "Failed to open file.\n";
+            return false;
+        }
+    
+        char header[4];
+        char footer[4];
+    
+        file.read(header, sizeof(header));
+    
+        if (!file.seekg(-4, std::ios::end)) {
+            std::cerr << "File too small.\n";
+            return false;
+        }
+    
+        file.read(footer, sizeof(footer));
+    
+        return std::string_view(header, 4) == "PAR1" && std::string_view(footer, 4) == "PAR1";
+    }
+
     std::string get_env_var(std::string const &key, std::string const &default_value) {
         const char *val = std::getenv(key.c_str());
         return val == nullptr ? std::string(default_value) : std::string(val);
@@ -136,5 +160,65 @@ namespace misc_utilities {
             std::cout << "Directory already exists. Doing nothing." << std::endl;
         }
     }
+
+    /*
+    double compute_cost(const std::string& loads_filename, int cost_profile_id) {
+        std::shared_ptr<arrow::io::ReadableFile> infile;
+        PARQUET_ASSIGN_OR_THROW(infile, arrow::io::ReadableFile::Open(loads_filename, arrow::default_memory_pool()));
+        std::unique_ptr<parquet::arrow::FileReader> reader;
+        PARQUET_THROW_NOT_OK(parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
+    
+        std::shared_ptr<arrow::ChunkedArray> amountArray;
+        std::shared_ptr<arrow::ChunkedArray> bmpIdArray;
+    
+        // Get the schema from the Parquet file
+        std::shared_ptr<arrow::Schema> schema;
+        PARQUET_THROW_NOT_OK(reader->GetSchema(&schema));
+        
+        // Find the index of the "Amount" column
+        int amount_index = schema->GetFieldIndex("Amount");
+        if (amount_index == -1) {
+            throw std::runtime_error("Amount column not found in Parquet file.");
+        }
+        
+        // Find the index of the "BmpId" column
+        int bmpId_index = schema->GetFieldIndex("BmpId");
+        if (bmpId_index == -1) {
+            throw std::runtime_error("BmpId column not found in Parquet file.");
+        }
+        
+        // Read the "Amount" column by index
+        PARQUET_THROW_NOT_OK(reader->ReadColumn(amount_index, &amountArray));
+        
+        // Read the "BmpId" column by index
+        PARQUET_THROW_NOT_OK(reader->ReadColumn(bmpId_index, &bmpIdArray));
+        //PARQUET_THROW_NOT_OK(reader->GetColumnByName("Amount", &amountArray));
+        //PARQUET_THROW_NOT_OK(reader->GetColumnByName("BmpId", &bmpIdArray));
+    
+        if (amountArray->length() != bmpIdArray->length()) {
+            throw std::runtime_error("Length mismatch between Amount and BmpId columns.");
+        }
+    
+        double total_cost = 0.0;
+    
+        // Assuming the columns are split into chunks of equal size
+        for (int i = 0; i < amountArray->num_chunks(); i++) {
+            auto amountValues = std::static_pointer_cast<arrow::DoubleArray>(amountArray->chunk(i));
+            auto bmpIdValues = std::static_pointer_cast<arrow::Int32Array>(bmpIdArray->chunk(i));
+    
+            for (int64_t j = 0; j < amountValues->length(); j++) {
+                if (!amountValues->IsNull(j) && !bmpIdValues->IsNull(j)) {
+                    int bmpId = bmpIdValues->Value(j);
+                    double amount = amountValues->Value(j);
+    
+                    auto cost_per_unit = data_.get_bmp_cost(cost_profile_id, bmpId);
+                    total_cost += cost_per_unit * amount;
+                }
+            }
+        }
+    
+        return total_cost;
+    }
+    */
 
 }

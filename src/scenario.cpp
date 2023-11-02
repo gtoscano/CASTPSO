@@ -17,19 +17,26 @@
 #include <parquet/stream_writer.h>
 
 #include <arrow/api.h>
+#include <arrow/io/file.h>
+#include <arrow/io/memory.h>
+#include <arrow/ipc/reader.h>
+#include <arrow/status.h>
+#include <arrow/type.h>
+
+#include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/csv/api.h>
 #include <arrow/csv/writer.h>
-#include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
 #include <arrow/result.h>
 #include <arrow/status.h>
 #include <arrow/table.h>
 #include <arrow/compute/api_aggregate.h>
-#include <arrow/api.h>
 #include <boost/algorithm/string.hpp>   
 
-
+#include <vector>
+#include <tuple>
+#include <memory>
 
 #include "amqp.h"
 #include "misc_utilities.h"
@@ -39,8 +46,9 @@ using json = nlohmann::json;
 
 
 const double MIN_LC_THRESHOLD = 10.0;
-const double MAX_PCT_LC_BMP = 0.3;
-const double MAX_PCT_ANIMAL_BMP = 0.3;
+const double MAX_PCT_LC_BMP = 0.30;
+const double MAX_PCT_ANIMAL_BMP = 0.30;
+const double MAX_PCT_MANURE_BMP = 0.30;
 
 
 namespace {
@@ -56,23 +64,43 @@ Scenario::Scenario() {
     is_ef_enabled = false;
     is_lc_enabled = false;
     is_animal_enabled = false;
+    is_manure_enabled = false;
     load_to_opt_ = 0;
     lc_size_ = 0;
     animal_size_ = 0;
+    manure_size_ = 0;
     nvars_ = 0;
     ef_begin_ = 0;
     lc_begin_ = 0;
     animal_begin_ = 0;
+    manure_begin_ = 0;
 
     std::string msu_cbpo_path = misc_utilities::get_env_var("MSU_CBPO_PATH", "/opt/opt4cast");
     csvs_path = fmt::format("{}/csvs",msu_cbpo_path);
 }
 
-void Scenario::init(const std::string& filename, bool is_ef_enabled, bool is_lc_enabled, bool is_animal_enabled ) {
+void Scenario::init(const std::string& filename, bool is_ef_enabled, bool is_lc_enabled, bool is_animal_enabled, bool is_manure_enabled) {
     this->is_ef_enabled = is_ef_enabled;
     this->is_lc_enabled = is_lc_enabled;
     this->is_animal_enabled = is_animal_enabled;
+    this->is_manure_enabled = is_manure_enabled;
     load(filename);
+    manure_counties_ = {"102"};//102: Nelson
+    auto neighbors_file = "cast_neighbors.json";
+    load_neighbors(neighbors_file);
+    auto manure_nutrients_file = "manurenutrientsconfinement.parquet";
+    manure_dry_lbs_ = read_manure_nutrients(manure_nutrients_file); //call it after load_neighbors
+                                                                    //
+                                                                    
+    //print manure_dry_lbs_
+    fmt::print("Manure Dry Lbs:\n");
+    for (const auto& [key, value] : manure_dry_lbs_) {
+                double moisture = 0.7;
+                double amount = value/ (1.0 - moisture); //convert to wet pounds 
+                amount = amount / 2000.0; //convert to wet tons
+                fmt::print("{}: {} wet tons\n", key, amount);
+    }
+
     nvars_ = 0;
     if (is_ef_enabled) {
         compute_efficiency_keys();
@@ -91,7 +119,12 @@ void Scenario::init(const std::string& filename, bool is_ef_enabled, bool is_lc_
         compute_animal_keys();
         animal_begin_ = nvars_;
         nvars_ += compute_animal_size();
-        
+    }
+
+    if (is_manure_enabled) {
+        compute_manure_keys();
+        manure_begin_ = nvars_;
+        nvars_ += compute_manure_size();
     }
 }
 
@@ -114,8 +147,9 @@ int Scenario::compute_ef() {
         std::vector <std::string> out;
         misc_utilities::split_str(key, '_', out);
         auto s = out[0];
+        auto lrseg = std::stoi(out[0]);
         auto u = out[2];
-        auto state_id = lrseg_.at(s)[1];
+        auto [fips, state_id, county, geography] = lrseg_dict_[lrseg];
         auto alpha = amount_[key];
         auto bmp_group_idx = 0;
         for (const auto &bmp_group: bmp_groups) {
@@ -224,11 +258,6 @@ size_t Scenario::compute_efficiency_size() {
     ef_end_ = counter;
     return counter;
 }
-size_t Scenario::compute_manure_transport_size() {
-    size_t counter = 0;
-
-    return counter;
-}
 
 size_t Scenario::compute_lc_size() {
     size_t counter = 0;
@@ -245,7 +274,8 @@ size_t Scenario::compute_lc_size() {
 
 size_t Scenario::compute_animal_size() {
     size_t counter = 0;
-    for (const auto &[key, bmp_group]: animal_complete_) {
+    for (const auto &key: animal_keys_) {
+        auto bmp_group = animal_complete_[key];
         ++counter; //to take into account the dummy bmp
         for (const auto &bmp: bmp_group) {
             ++counter;
@@ -255,15 +285,25 @@ size_t Scenario::compute_animal_size() {
     return counter;
 }
 
+size_t Scenario::compute_manure_size() {
+    size_t counter = 0;
+    for (const auto &key: manure_keys_) {
+        auto neighbors = manure_all_[key];
+        ++counter; //to take into account the dummy bmp
+        for (const auto &neighbor_to: neighbors) {
+            ++counter;
+        }
+    }
+    manure_size_ = counter;
+    return counter;
+}
+
 void Scenario::compute_efficiency_keys() {
     for (const auto& pair : efficiency_) {
         ef_keys_.push_back(pair.first);
     }
     // Sort the vector of keys
     std::sort(ef_keys_.begin(), ef_keys_.end());
-}
-
-void Scenario::compute_manure_transport_keys() {
 }
 
 void Scenario::compute_lc_keys() {
@@ -293,6 +333,34 @@ void Scenario::compute_animal_keys() {
     std::sort(animal_keys_.begin(), animal_keys_.end());
 }
 
+void Scenario::compute_manure_keys() {
+    for (const auto& pair : manure_dry_lbs_) {
+        manure_keys_.push_back(pair.first);
+    }
+    std::sort(manure_keys_.begin(), manure_keys_.end());
+}
+
+void Scenario::load_neighbors(const std::string& filename) {
+    std::ifstream file(filename);
+    if (!file.is_open()) {
+        std::cerr << "Failed to open the file." << std::endl;
+        exit(-1);
+        return;
+    }
+
+    json json_obj = json::parse(file);
+    auto tmp_neighbors = json_obj.get<std::unordered_map<std::string, std::vector<int>>>();
+    for (const auto& [key, value] : tmp_neighbors) {
+        std::vector<int> tmp;
+        for (const auto& val : value) {
+            tmp.push_back(val);
+        }
+        if (tmp.size() > 0) {
+            neighbors_dict_[key] = tmp;
+        }
+    }
+}
+
 
 void Scenario::load(const std::string& filename) {
 
@@ -318,6 +386,7 @@ void Scenario::load(const std::string& filename) {
     amount_ = json_obj["amount"].get<std::unordered_map<std::string, double>>();
     efficiency_ = json_obj["efficiency"].get<std::unordered_map<std::string, std::vector<std::vector<int>>>>();
     valid_lc_bmps_ = json_obj["valid_lc_bmps"].get<std::vector<std::string>>();
+    valid_lc_bmps_ = {"7", "9", "13"};
 
     auto land_conversion_from_bmp_to_tmp = json_obj["land_conversion_to"].get<std::unordered_map<std::string, std::vector<std::string>>>();
     for (const auto& [key, value] : land_conversion_from_bmp_to_tmp) {
@@ -337,16 +406,19 @@ void Scenario::load(const std::string& filename) {
     }
     
     bmp_cost_ = json_obj["bmp_cost"].get<std::unordered_map<std::string, double>>();
+    //lrseg_ = json_obj["lrseg"].get<std::unordered_map<std::string, std::vector<int>>>();
     animal_complete_ = json_obj["animal_complete"].get<std::unordered_map<std::string, std::vector<int>>>();
     animal_ = json_obj["animal_unit"].get<std::unordered_map<std::string, double>>();
     animal_complete_ = json_obj["animal_complete"].get<std::unordered_map<std::string, std::vector<int>>>();
     auto lrseg_tmp = json_obj["lrseg"].get<std::unordered_map<std::string, std::vector<int>>>();
     scenario_data_str_ = json_obj["scenario_data_str"].get<std::string>();
     boost::replace_all(scenario_data_str_, "A", "38");
-    boost::replace_all(scenario_data_str_, "N", "1");
+    boost::replace_all(scenario_data_str_, "N", "7");
     std::vector<int> counties ={381, 364, 402, 391, 362, 367, 365};
-    std::string counties_str = "381";//_364_402_391_362_367_365";
+    std::string counties_str = "381_364_402_391_362_367_365";
+    counties_str = counties_str;//"410";//_364_402_391_362_367_365";
     scenario_data_str_ = fmt::format("{}_{}", scenario_data_str_, counties_str);
+    //scenario_data_str_ = "empty_38_6611_256_6_4_59_1_6608_158_2_31_8_381";
     /*  
 
     std::string scenario_name = "empty";
@@ -421,7 +493,7 @@ void Scenario::initialize_vector(std::vector<double>& x) {
                 /********if(flag) {
                     x[lc_idx] = 0.0;
                 } else {*/
-                    x[lc_idx] = misc_utilities::rand_double(0.0, 0.1); 
+                    x[lc_idx] = misc_utilities::rand_double(0.0, 1.0); 
                     //x[lc_idx] = misc_utilities::rand_double(0.0, 1.0); 
                 //}
                 ++lc_idx;
@@ -436,11 +508,24 @@ void Scenario::initialize_vector(std::vector<double>& x) {
             x[animal_idx] = 1.0;
             ++animal_idx;
             for (const auto &bmp: bmp_group) {
-                x[animal_idx] = misc_utilities::rand_double(0.0, 0.1); 
+                x[animal_idx] = misc_utilities::rand_double(0.0, 1.0); 
                 ++animal_idx;
             }
         }
     }
+    if (is_manure_enabled == true) {
+        size_t manure_idx = manure_begin_;
+        for (const auto &key: manure_keys_) {
+            auto neighbors = manure_all_[key];
+            x[manure_idx] = 1.0;
+            ++manure_idx;
+            for (const auto &neighbor : neighbors) {
+                x[manure_idx] = misc_utilities::rand_double(0.0, 1.0); 
+                ++manure_idx;
+            }
+        }
+    }
+
 }
 /*
  * 
@@ -557,6 +642,19 @@ double Scenario::compute_cost_animal(const std::vector<std::tuple<int, int, int,
     }
     return total_cost;
 }
+
+double Scenario::compute_cost_manure(const std::vector<std::tuple<int, int, int, int, int, double>>& parcel) {
+    double total_cost = 0.0;
+    for(const auto& entry : parcel) { 
+        auto [county_from, county_to, load_src, animal_id, bmp, amount] = entry; 
+        auto [geography_from, geography2_id_from, fips_from, county_name_from, state_abbr_from] = geography_county_[county_from];
+        auto state = counties_[county_from];
+        auto key_bmp_cost = fmt::format("{}_{}", state, bmp);
+        double cost = bmp_cost_[key_bmp_cost];
+        total_cost += cost;
+    }
+    return total_cost;
+}
 /*
  *
  * 
@@ -657,6 +755,57 @@ double Scenario::normalize_animal(const std::vector<double>& x, std::vector<std:
     return total_cost;
 }
 
+
+
+double Scenario::normalize_manure(const std::vector<double>& x, std::vector<std::tuple<int, int, int, int, int, double>>& manure_x) {
+    size_t counter = manure_begin_;
+    double total_cost = 0.0;
+    manure_x.clear();
+    auto bmp = 31; //manure transport
+    //std::vector<std::string> lc_altered_keys;
+    
+    for (const std::string& key : manure_keys_) {
+        std::vector<int> neighbors =  manure_all_[key];
+
+        std::vector<std::pair<double, int>> grp_tmp;
+        std::vector <std::string> key_split;
+        misc_utilities::split_str(key, '_', key_split);
+        auto county = std::stoi(key_split[0]);
+        auto load_src = std::stoi(key_split[1]);
+        auto animal_id = std::stoi(key_split[2]);
+        double sum = x[counter];
+        ++counter; //to take into account the dummy bmp
+
+        for (int neighbor_to: neighbors) {
+            grp_tmp.push_back({x[counter], neighbor_to});
+            sum += x[counter];
+            ++counter;
+        }
+
+        double pct_accum = 0.0;
+        //fmt::format("grp_tmp: {}\n", grp_tmp.size());
+        for (auto [pct, neighbor_to]: grp_tmp) {
+            //double norm_pct =  (double) pct / sum;
+
+            double norm_pct =  (MAX_PCT_MANURE_BMP*pct) / sum;
+            if (norm_pct * manure_dry_lbs_[key] > 1.0) {
+                double amount = (norm_pct * manure_dry_lbs_[key]);
+                double moisture = 0.7;
+                amount = amount / (1.0 - moisture); //convert to wet pounds 
+                amount = amount / 2000.0; //convert to wet tons
+                auto state = counties_[county];
+                std::string key_bmp_cost = fmt::format("{}_{}", state, bmp);
+                double cost = amount * bmp_cost_[key_bmp_cost];
+                total_cost += cost;
+                manure_x.push_back({county, neighbor_to, load_src, animal_id, bmp, amount});
+            }
+        }
+    }
+
+    //std::cout<<"animal_x: "<<animal_x.size()<<std::endl;
+    return total_cost;
+}
+
 std::vector<std::string> Scenario::send_files(const std::string& emo_uuid, const std::vector<std::string>& exec_uuid_vec) {
     std::string emo_str = scenario_data_str_;
     
@@ -703,6 +852,23 @@ size_t Scenario::write_animal_json(const std::vector<std::tuple<int, int, int, i
     file.close();
     return animal_x.size();
 }
+
+
+size_t Scenario::write_manure_json(const std::vector<std::tuple<int, int, int, int, int, double>>& manure_x, const std::string& out_filename) {
+    std::unordered_map<std::string, double> manure_x_to_json;
+
+    for(auto [county_from, county_to, load_src, animal_id, bmp, amount] : manure_x) {
+        std::string key = fmt::format("{}_{}_{}_{}_{}", county_from, county_to, load_src, animal_id, bmp); 
+        manure_x_to_json[key] = amount;
+    }
+    json json_obj = manure_x_to_json;
+    std::ofstream file(out_filename);
+    file<<json_obj.dump();
+    file.close();
+    return manure_x.size();
+}
+
+
 
 int Scenario::write_land(
         const std::vector<std::tuple<int, int, int, int, double>>& lc_x,
@@ -895,10 +1061,159 @@ int Scenario::write_animal ( const std::vector<std::tuple<int, int, int, int, in
         int agency = 9;
         double nreduction=0.0, preduction=0.0;
         os<<counter+1<<bmp<<agency<<fmt::format("SU{}",counter)<<state<<geography2_id<<animal_id<<u_u_group_dict[load_src]<< unit_id<<amount<<nreduction<<preduction<<true<<""<<counter+1<<parquet::EndRow;
+        counter++;
+    }
+
+    return counter;
+}
+
+int Scenario::write_manure( const std::vector<std::tuple<int, int, int, int, int, double>>& manure_x,
+        const std::string& out_filename) {
+    if (manure_x.size() == 0) {
+        return 0;
+    }
+
+
+    parquet::schema::NodeVector fields;
+
+
+    //BmpSubmittedId	BmpId	AgencyId	StateUniqueIdentifier	StateId	HasStateReference	CountyIdFrom	CountyIdTo	FipsFrom	FipsTo	AnimalGroupId	LoadSourceGroupId	UnitId	Amount	IsValid	ErrorMessage	RowIndex
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "BmpSubmittedId", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "BmpId", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "AgencyId", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "StateUniqueIdentifier", parquet::Repetition::REQUIRED, parquet::Type::BYTE_ARRAY, parquet::ConvertedType::UTF8
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "StateId", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+
+    ///////////////////////////////////////
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "HasStateReference", parquet::Repetition::REQUIRED, parquet::Type::BOOLEAN
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "CountyIdFrom", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "CountyIdTo", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "FipsFrom", parquet::Repetition::REQUIRED, parquet::Type::BYTE_ARRAY, parquet::ConvertedType::UTF8
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "FipsTo", parquet::Repetition::REQUIRED, parquet::Type::BYTE_ARRAY, parquet::ConvertedType::UTF8
+    ));
+    ///////////////////////////////////////
+
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "AnimalGroupId", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "LoadSourceGroupId", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "UnitId", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "Amount", parquet::Repetition::REQUIRED, parquet::Type::DOUBLE
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "IsValid", parquet::Repetition::REQUIRED, parquet::Type::BOOLEAN
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "ErrorMessage", parquet::Repetition::REQUIRED, parquet::Type::BYTE_ARRAY, parquet::ConvertedType::UTF8
+    ));
+    fields.push_back(parquet::schema::PrimitiveNode::Make(
+            "RowIndex", parquet::Repetition::REQUIRED, parquet::Type::INT32, parquet::ConvertedType::INT_32
+    ));
+    std::shared_ptr<arrow::io::FileOutputStream> outfile;
+
+    PARQUET_ASSIGN_OR_THROW(
+            outfile,
+            arrow::io::FileOutputStream::Open(out_filename));
+
+    std::shared_ptr<parquet::schema::GroupNode> my_schema = std::static_pointer_cast<parquet::schema::GroupNode>(
+            parquet::schema::GroupNode::Make("schema", parquet::Repetition::REQUIRED, fields));
+
+    parquet::WriterProperties::Builder builder;
+    //builder.compression(parquet::Compression::ZSTD);
+    //builder.compression(parquet::Compression::SNAPPY);
+    builder.version(parquet::ParquetVersion::PARQUET_1_0);
+    parquet::StreamWriter os{
+            parquet::ParquetFileWriter::Open(outfile, my_schema, builder.build())};
+
+
+    int idx = 0;
+    int counter = 0;
+    double total_cost = 0.0;
+    for(auto [county_from, county_to, load_src, animal_id, bmp, amount] : manure_x) {
+        auto [geography_from, geography2_id_from, fips_from, county_name_from, state_abbr_from] = geography_county_[county_from];
+        auto [geography_to, geography2_id_to, fips_to, county_name_to, state_abbr_to] = geography_county_[county_to];
+        auto state_from = counties_[county_from];
+        auto state_to = counties_[county_to];
+        //int geography_id = 121; //121: Jefferson
+        int unit_id = 12; //wet tons
+
+        auto key_bmp_cost= fmt::format("{}_{}", state_from, bmp);
+        double cost = bmp_cost_[key_bmp_cost];
+        total_cost += cost;
+        int agency = 9; //????
+        os<<counter+1<<bmp<<agency<<fmt::format("SU{}",counter)<<state_from<<true<<county_from<<county_to<<fips_from<<fips_to<<animal_id<<u_u_group_dict[load_src]<< unit_id<<amount<<true<<""<<counter+1<<parquet::EndRow;
 
         counter++;
     }
 
     return counter;
+}
+
+
+
+std::unordered_map<std::string, double> Scenario::read_manure_nutrients(const std::string& filename) {
+    std::unordered_map<std::string, double> manure_dry_lbs;
+    std::shared_ptr<arrow::io::ReadableFile> infile;
+    PARQUET_ASSIGN_OR_THROW(infile, arrow::io::ReadableFile::Open(filename, arrow::default_memory_pool()));
+    
+    std::unique_ptr<parquet::arrow::FileReader> reader;
+    PARQUET_THROW_NOT_OK(parquet::arrow::OpenFile(infile, arrow::default_memory_pool(), &reader));
+
+    std::shared_ptr<arrow::Table> table;
+    PARQUET_THROW_NOT_OK(reader->ReadTable(&table));
+
+    // Find the column indices by name
+    int lrsegIdIdx = table->schema()->GetFieldIndex("LrsegId");
+    int loadSourceIdIdx = table->schema()->GetFieldIndex("LoadSourceId");
+    int animalIdIdx = table->schema()->GetFieldIndex("AnimalId");
+    int nutrientIdIdx = table->schema()->GetFieldIndex("NutrientId");
+    int storedManureDryLbsIdx = table->schema()->GetFieldIndex("StoredManureDryLbs");
+
+    for (int i = 0; i < table->num_rows(); i++) {
+        int nutrient_id = std::static_pointer_cast<arrow::Int32Array>(table->column(nutrientIdIdx)->chunk(0))->Value(i);
+        if (nutrient_id == 1) {
+            int lrseg_id = std::static_pointer_cast<arrow::Int32Array>(table->column(lrsegIdIdx)->chunk(0))->Value(i);
+            int load_source_id = std::static_pointer_cast<arrow::Int32Array>(table->column(loadSourceIdIdx)->chunk(0))->Value(i);
+            int animal_id = std::static_pointer_cast<arrow::Int32Array>(table->column(animalIdIdx)->chunk(0))->Value(i);
+            double stored_manure_dry_lbs = std::static_pointer_cast<arrow::DoubleArray>(table->column(storedManureDryLbsIdx)->chunk(0))->Value(i);
+
+            auto [fips, state, county, geography] = lrseg_dict_[lrseg_id];
+            auto county_str = std::to_string(county);
+            auto result = std::ranges::find(manure_counties_, county_str);
+            if(result != manure_counties_.end() && stored_manure_dry_lbs > 0.0) {
+                auto key = fmt::format("{}_{}_{}", county, load_source_id, animal_id);
+                manure_dry_lbs[key] += stored_manure_dry_lbs;
+                auto neighbors = neighbors_dict_[county_str]; 
+                std::sort(neighbors.begin(), neighbors.end());
+                manure_all_[key] = neighbors; 
+            }
+        }
+    }
+
+    return manure_dry_lbs;
 }
 

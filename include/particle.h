@@ -26,13 +26,21 @@ public:
     void update_pbest();
     const std::vector<std::tuple<int, int, int, int, double>> get_lc_x() const { return lc_x_; }
     const std::vector<std::tuple<int, int, int, int, int, double>> get_animal_x() const { return animal_x_; }
+    const std::vector<std::tuple<int, int, int, int, int, double>> get_manure_x() const { return manure_x_; }
     void set_lc_x(const std::vector<std::tuple<int, int, int, int, double>>& lc_x) { lc_x_ = lc_x; }
     void set_animal_x(const std::vector<std::tuple<int, int, int, int, int, double>>& animal_x) { animal_x_ = animal_x; }
+    void set_manure_x(const std::vector<std::tuple<int, int, int, int, int, double>>& manure_x) { manure_x_ = manure_x; }
     void set_lc_cost(double lc_cost) { lc_cost_ = lc_cost; }
-    double get_lc_cost() { return lc_cost_; }
+    const double get_lc_cost() const { return lc_cost_; }
     void set_animal_cost(double animal_cost) { animal_cost_ = animal_cost; }
-    double get_animal_cost() { return animal_cost_; }
-
+    void set_manure_cost(double manure_cost) { manure_cost_ = manure_cost; }
+    const double get_animal_cost() const { return animal_cost_; }
+    const double get_manure_cost() const { return manure_cost_; }
+    void set_amount_plus(const std::unordered_map<std::string, double>& amount_plus) { amount_plus_ = amount_plus; }
+    const std::unordered_map<std::string, double>& get_amount_plus() const { return amount_plus_; }
+    void set_amount_minus(const std::unordered_map<std::string, double>& amount_minus) { amount_minus_ = amount_minus; }
+    const std::unordered_map<std::string, double>& get_amount_minus() const { return amount_minus_; }
+    void store_amount_plus_minus(const std::string& filename);
 
 private:
     int dim;
@@ -48,7 +56,12 @@ private:
     double upper_bound;
     std::vector<std::tuple<int, int, int, int, double>> lc_x_;
     std::vector<std::tuple<int, int, int, int, int, double>> animal_x_;
+    std::vector<std::tuple<int, int, int, int, int, double>> manure_x_;
+
+    std::unordered_map<std::string, double> amount_minus_;
+    std::unordered_map<std::string, double> amount_plus_;
     double lc_cost_;
     double animal_cost_;
+    double manure_cost_;
 };
 #endif

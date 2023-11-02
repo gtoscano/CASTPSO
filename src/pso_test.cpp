@@ -40,7 +40,7 @@ int main (int argc, char *argv[]) {
     double ub(1.0);
     std::string input_filename = "prueba.json";
     std::string out_dir = "out";
-    PSO pso(nparts, nobjs, max_iter, w, c1, c2, lb, ub, input_filename, out_dir, false, true, true);
+    PSO pso(nparts, nobjs, max_iter, w, c1, c2, lb, ub, input_filename, out_dir, false, true, true, true);
     pso.optimize();
     std::vector<std::vector<double>> gbest_x = pso.get_gbest_x();
     std::vector<std::vector<double>> gbest_fx = pso.get_gbest_fx();

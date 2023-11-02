@@ -68,9 +68,9 @@ namespace {
 
 
 int main (int argc, char *argv[]) {
-    int nparts = 10;
+    int nparts = 20;
     int nobjs = 2;
-    int max_iter = 20;
+    int max_iter = 5;
     double c1 = 1.4;
     double c2 = 1.4;
     double w = 0.7;
@@ -81,15 +81,19 @@ int main (int argc, char *argv[]) {
     bool is_ef_enabled = false;
     bool is_lc_enabled = true;
     bool is_animal_enabled = false;
+    bool is_manure_enabled = false;
+    // Jefferson.json 
+    //./PSOCast Nelson.json an-all 0 0 1
     if (argc > 1) {
         input_filename = argv[1];
         dir_output = argv[2];
         is_ef_enabled = std::stoi(argv[3]);
         is_lc_enabled = std::stoi(argv[4]);
         is_animal_enabled = std::stoi(argv[5]);
+        is_manure_enabled = std::stoi(argv[6]);
     } 
 
-    PSO pso(nparts, nobjs, max_iter, w, c1, c2, lb, ub, input_filename, dir_output, is_ef_enabled, is_lc_enabled, is_animal_enabled);
+    PSO pso(nparts, nobjs, max_iter, w, c1, c2, lb, ub, input_filename, dir_output, is_ef_enabled, is_lc_enabled, is_animal_enabled, is_manure_enabled);
     pso.optimize();
     pso.save_gbest(dir_output);
     //std::vector<Particle> gbest = pso.get_gbest();

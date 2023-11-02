@@ -75,7 +75,7 @@ bool RabbitMQClient::send_message(std::string routing_name, std::string msg) {
 void RabbitMQClient::send_signal(std::string exec_uuid) {
     redis_.hset("emo_data", exec_uuid, emo_data_);
     auto scenario_id = *redis_.lpop("scenario_ids");
-    std::cout<<"Current Scenario ID: "<<scenario_id<<std::endl;
+    //std::cout<<"Current Scenario ID: "<<scenario_id<<std::endl;
     redis_.hset("solution_to_execute_dict", exec_uuid, fmt::format("{}_{}", emo_uuid_, scenario_id));
     try {
         auto msg = exec_uuid;

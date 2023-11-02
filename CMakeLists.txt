@@ -6,7 +6,6 @@ project(ExternalArchive)
 # Add C++ 20 support
 set(CMAKE_CXX_STANDARD 20)
 
-find_package(spdlog REQUIRED)
 find_package(crossguid CONFIG REQUIRED)
 find_package(Arrow REQUIRED)
 find_package(Parquet REQUIRED)
@@ -22,7 +21,6 @@ set(LIB_REPORT_LOADS_HEADERS
 
 # Include directories (add the path where external_archive.h is located)
 include_directories(${INCLUDE_DIR})
-
 # Add the executable with your source files
 add_executable(ExternalArchiveTest ${SOURCE_DIR}/external_archive.cpp ${SOURCE_DIR}/external_archive_test.cpp ${SOURCE_DIR}/particle.cpp)
 add_executable(Execute ${SOURCE_DIR}/exec_test.cpp ${SOURCE_DIR}/execute.cpp ${SOURCE_DIR}/misc_utilities.cpp)
