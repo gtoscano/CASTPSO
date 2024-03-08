@@ -84,24 +84,8 @@ void Scenario::init(const std::string& filename, bool is_ef_enabled, bool is_lc_
     this->is_lc_enabled = is_lc_enabled;
     this->is_animal_enabled = is_animal_enabled;
     this->is_manure_enabled = is_manure_enabled;
-    load(filename);
-    manure_counties_ = {"102"};//102: Nelson
-    auto neighbors_file = "cast_neighbors.json";
-    load_neighbors(neighbors_file);
-    auto manure_nutrients_file = "manurenutrientsconfinement.parquet";
-    manure_dry_lbs_ = read_manure_nutrients(manure_nutrients_file); //call it after load_neighbors
-                                                                    //
-                                                                    
-    //print manure_dry_lbs_
-    fmt::print("Manure Dry Lbs:\n");
-    for (const auto& [key, value] : manure_dry_lbs_) {
-                double moisture = 0.7;
-                double amount = value/ (1.0 - moisture); //convert to wet pounds 
-                amount = amount / 2000.0; //convert to wet tons
-                fmt::print("{}: {} wet tons\n", key, amount);
-    }
-
     nvars_ = 0;
+    load(filename);
     if (is_ef_enabled) {
         compute_efficiency_keys();
         ef_begin_ = nvars_;
@@ -122,6 +106,22 @@ void Scenario::init(const std::string& filename, bool is_ef_enabled, bool is_lc_
     }
 
     if (is_manure_enabled) {
+        manure_counties_ = {"102"};//102: Nelson
+        auto neighbors_file = "cast_neighbors.json";
+        load_neighbors(neighbors_file);
+        auto manure_nutrients_file = "manurenutrientsconfinement.parquet";
+        manure_dry_lbs_ = read_manure_nutrients(manure_nutrients_file); //call it after load_neighbors
+                                                                        //
+                                                                        
+        //print manure_dry_lbs_
+        fmt::print("Manure Dry Lbs:\n");
+        for (const auto& [key, value] : manure_dry_lbs_) {
+             double moisture = 0.7;
+             double amount = value/ (1.0 - moisture); //convert to wet pounds 
+             amount = amount / 2000.0; //convert to wet tons
+             fmt::print("{}: {} wet tons\n", key, amount);
+        }
+
         compute_manure_keys();
         manure_begin_ = nvars_;
         nvars_ += compute_manure_size();
@@ -343,7 +343,8 @@ void Scenario::compute_manure_keys() {
 void Scenario::load_neighbors(const std::string& filename) {
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Failed to open the file." << std::endl;
+        std::cerr << "Failed to open the file: "<<filename<<".\n";
+
         exit(-1);
         return;
     }
@@ -367,7 +368,7 @@ void Scenario::load(const std::string& filename) {
     // Open the JSON file
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Failed to open the file." << std::endl;
+        std::cerr << "Failed to open the file: "<<filename<<".\n";
         exit(-1);
         return;
     }
@@ -384,6 +385,8 @@ void Scenario::load(const std::string& filename) {
 
     // Access the JSON data
     amount_ = json_obj["amount"].get<std::unordered_map<std::string, double>>();
+
+    phi_dict_ = json_obj["phi"].get<std::unordered_map<std::string, std::vector<double>>>();
     efficiency_ = json_obj["efficiency"].get<std::unordered_map<std::string, std::vector<std::vector<int>>>>();
     valid_lc_bmps_ = json_obj["valid_lc_bmps"].get<std::vector<std::string>>();
     valid_lc_bmps_ = {"7", "9", "13"};
@@ -412,13 +415,14 @@ void Scenario::load(const std::string& filename) {
     animal_complete_ = json_obj["animal_complete"].get<std::unordered_map<std::string, std::vector<int>>>();
     auto lrseg_tmp = json_obj["lrseg"].get<std::unordered_map<std::string, std::vector<int>>>();
     scenario_data_str_ = json_obj["scenario_data_str"].get<std::string>();
-    boost::replace_all(scenario_data_str_, "A", "38");
-    boost::replace_all(scenario_data_str_, "N", "7");
-    std::vector<int> counties ={381, 364, 402, 391, 362, 367, 365};
-    std::string counties_str = "381_364_402_391_362_367_365";
-    counties_str = counties_str;//"410";//_364_402_391_362_367_365";
-    scenario_data_str_ = fmt::format("{}_{}", scenario_data_str_, counties_str);
-    //scenario_data_str_ = "empty_38_6611_256_6_4_59_1_6608_158_2_31_8_381";
+    //boost::replace_all(scenario_data_str_, "A", "38");
+    //boost::replace_all(scenario_data_str_, "N", "7");
+    //std::vector<int> counties ={381, 364, 402, 391, 362, 367, 365};
+    //td::string counties_str = "381_364_402_391_362_367_365";
+    //counties_str = counties_str;//"410";//_364_402_391_362_367_365";
+    //scenario_data_str_ = fmt::format("{}_{}", scenario_data_str_, counties_str);
+    std::cout<<"Scenario Data Str: "<<scenario_data_str_<<std::endl;
+    scenario_data_str_ = "empty_38_6611_256_6_4_59_1_6608_158_2_31_8_381";
     /*  
 
     std::string scenario_name = "empty";

@@ -54,7 +54,7 @@ namespace {
         
         // Check if the file opened successfully
         if (!outFile) {
-            std::cerr << "Failed to open the file.\n";
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             return;
         }
         
@@ -71,7 +71,7 @@ namespace {
     void save(const std::vector<Particle>& data, const std::string& filename, const std::string& filename_fx) {
         std::ofstream outFile(filename);
         if (!outFile) {
-            std::cerr << "Failed to open the file.\n";
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             return;
         }
         
@@ -86,7 +86,7 @@ namespace {
 
         std::ofstream out_file_fx(filename_fx);
         if (!out_file_fx) {
-            std::cerr << "Failed to open the file.\n";
+            std::cerr << "Failed to open the file: "<<filename_fx<<".\n";
             return;
         }
         
@@ -105,7 +105,7 @@ namespace {
         std::vector<std::vector<std::tuple<int, int, int, int, double>>> scenarios_list;
         std::ifstream file(filename);
         if (!file.is_open()) {
-            std::cerr << "Failed to open the file." << std::endl;
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             exit(-1);
         }
     
@@ -145,7 +145,7 @@ namespace {
         std::vector<std::vector<std::tuple<int, int, int, int, double>>> scenarios_list;
         std::ifstream file(filename);
         if (!file.is_open()) {
-            std::cerr << "Failed to open the file." << std::endl;
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             exit(-1);
         }
     
@@ -187,7 +187,7 @@ namespace {
     
         std::ifstream file(filename);
         if (!file.is_open()) {
-            std::cerr << "Failed to open the file." << std::endl;
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             exit(-1);
         }
     

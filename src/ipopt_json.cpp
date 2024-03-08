@@ -13,7 +13,7 @@ std::vector<std::unordered_map<std::string, double>> read_scenarios_keyed_json(s
     std::vector<std::unordered_map<std::string, double>> scenarios_list;
     std::ifstream file(filename);
     if (!file.is_open()) {
-        std::cerr << "Failed to open the file." << std::endl;
+        std::cerr << "Failed to open the file: "<<filename<<".\n";
         exit(-1);
     }
 
@@ -36,7 +36,7 @@ std::vector<std::unordered_map<std::string, double>> read_scenarios_keyed_json(s
         std::vector<std::vector<std::tuple<int, int, int, int, double>>> scenarios_list;
         std::ifstream file(filename);
         if (!file.is_open()) {
-            std::cerr << "Failed to open the file." << std::endl;
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             exit(-1);
         }
     
@@ -62,7 +62,7 @@ std::vector<std::unordered_map<std::string, double>> read_scenarios_keyed_json(s
     
         std::ifstream file(filename);
         if (!file.is_open()) {
-            std::cerr << "Failed to open the file." << std::endl;
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             exit(-1);
         }
     
@@ -85,7 +85,7 @@ int main (int argc, char *argv[]) {
     std::string filename = argv[1];
     std::string filename2 = argv[2];
 
-    fmt::print(filename);
+    fmt::print("{}\n", filename);
     auto scenarios_list = read_scenarios_keyed_json2(filename);
     auto parent_list = read_scenario_json(filename2);
 

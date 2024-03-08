@@ -72,7 +72,6 @@ Particle::Particle(const Particle &p) {
 
 Particle& Particle::operator=(const Particle &p) {
   // Protect against self-assignment
-    //fmt::print("Particle assignment operator\n");
     if (this == &p) {
         return *this;
     }

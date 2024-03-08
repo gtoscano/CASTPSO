@@ -20,7 +20,7 @@ namespace {
         
         // Check if the file opened successfully
         if (!outFile) {
-            std::cerr << "Failed to open the file.\n";
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             return;
         }
         
@@ -36,7 +36,7 @@ namespace {
     void save(const std::vector<Particle>& data, const std::string& filename, const std::string& filename_fx) {
         std::ofstream outFile(filename);
         if (!outFile) {
-            std::cerr << "Failed to open the file.\n";
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             return;
         }
         
@@ -51,7 +51,7 @@ namespace {
 
         std::ofstream out_file_fx(filename_fx);
         if (!out_file_fx) {
-            std::cerr << "Failed to open the file.\n";
+            std::cerr << "Failed to open the file: "<<filename_fx<<".\n";
             return;
         }
         
@@ -83,7 +83,7 @@ int main (int argc, char *argv[]) {
     bool is_animal_enabled = false;
     bool is_manure_enabled = false;
     // Jefferson.json 
-    //./PSOCast Nelson.json an-all 0 0 1
+    //./PSOCast Nelson.json fastest 0 1 0 0
     if (argc > 1) {
         input_filename = argv[1];
         dir_output = argv[2];

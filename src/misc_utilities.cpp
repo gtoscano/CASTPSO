@@ -19,7 +19,7 @@ namespace misc_utilities {
         std::ifstream file(filename, std::ios::binary);
     
         if (!file) {
-            std::cerr << "Failed to open file.\n";
+            std::cerr << "Failed to open the file: "<<filename<<".\n";
             return false;
         }
     
@@ -154,7 +154,7 @@ namespace misc_utilities {
             if (fs::create_directories(dir_path)) {
                 std::cout << "Directory created successfully." << std::endl;
             } else {
-                std::cerr << "Failed to create directory." << std::endl;
+                std::cerr << "Failed to open the directory: "<<dir_path<<".\n";
             }
         } else {
             std::cout << "Directory already exists. Doing nothing." << std::endl;
